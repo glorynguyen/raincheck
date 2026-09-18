@@ -55,6 +55,26 @@ npx wrangler secret put TOMORROW_IO_API_KEY
 npm run deploy
 ```
 
+### Passkey favorites
+
+Passkey accounts and favorite places are stored in Cloudflare D1. Create the
+database once, copy its returned `database_id` into `wrangler.jsonc`, then
+apply the migration locally and remotely:
+
+```bash
+npx wrangler d1 create raincheck-auth
+npx wrangler d1 execute raincheck-auth --local --file=migrations/0001_passkey_favorites.sql
+npx wrangler d1 execute raincheck-auth --remote --file=migrations/0001_passkey_favorites.sql
+```
+
+Passkeys require HTTPS, except for localhost during development. The Worker
+uses the current request hostname as the relying-party ID and its origin as the
+expected origin, so deploy the app only to the HTTPS hostnames intended for
+Raincheck. Session cookies are `Secure`, `HttpOnly`, and `SameSite=Lax`; do not
+add a browser token or expose credential/challenge data in application storage.
+
+After creating the D1 database, deploy as usual with `npm run deploy`.
+
 For Git push-to-deploy, connect the repository under the Worker in Cloudflare
 Workers Builds:
 

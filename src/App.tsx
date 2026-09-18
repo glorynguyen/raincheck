@@ -1,10 +1,14 @@
 import { lazy, Suspense, useState } from 'react'
 import { Droplets } from 'lucide-react'
 import { ApiKeyControls } from './components/ApiKeyControls'
+import { FavoritePlacesControls } from './components/FavoritePlacesControls'
 import { HourlyForecast } from './components/HourlyForecast'
 import { LocationControls } from './components/LocationControls'
+import { PasskeyControls } from './components/PasskeyControls'
 import { RainSummary } from './components/RainSummary'
+import { useFavorites } from './hooks/useFavorites'
 import { useGeolocation } from './hooks/useGeolocation'
+import { usePasskeyAuth } from './hooks/usePasskeyAuth'
 import { useRainForecast } from './hooks/useRainForecast'
 import type { Coordinates } from './types/weather'
 
@@ -23,6 +27,13 @@ function App() {
   const [coordinates, setCoordinates] = useState(DEFAULT_COORDINATES)
   const forecast = useRainForecast()
   const geolocation = useGeolocation()
+  const auth = usePasskeyAuth()
+  const favorites = useFavorites(auth.authenticated)
+
+  function selectFavorite(nextCoordinates: Coordinates) {
+    setCoordinates(nextCoordinates)
+    forecast.loadForecast(nextCoordinates)
+  }
 
   return (
     <div className="app-shell">
@@ -53,6 +64,15 @@ function App() {
                 <h2 id="location-heading">Choose a location</h2>
               </div>
             </div>
+            <PasskeyControls
+              authenticated={auth.authenticated}
+              error={auth.error}
+              isBusy={auth.isBusy}
+              isUnsupported={auth.isUnsupported}
+              onRegister={auth.register}
+              onSignIn={auth.signIn}
+              onSignOut={auth.signOut}
+            />
             <LocationControls
               key={`${coordinates.lat.toFixed(6)},${coordinates.lng.toFixed(6)}`}
               coordinates={coordinates}
@@ -63,6 +83,17 @@ function App() {
               onLocate={() => geolocation.requestLocation(setCoordinates)}
               onSubmit={forecast.loadForecast}
             />
+            {auth.authenticated && (
+              <FavoritePlacesControls
+                coordinates={coordinates}
+                favorites={favorites.favorites}
+                error={favorites.error}
+                isLoading={favorites.isLoading}
+                onSelect={selectFavorite}
+                onSave={favorites.save}
+                onRemove={favorites.remove}
+              />
+            )}
             <p className="map-instruction">Or click the map to place the point.</p>
             <ApiKeyControls
               showRateLimitMessage={forecast.errorCode === 'rate_limited'}

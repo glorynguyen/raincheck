@@ -5,6 +5,16 @@ export const coordinatesSchema = z.object({
   lng: z.number().min(-180).max(180),
 })
 
+export const favoritePlaceInputSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  coordinates: coordinatesSchema,
+})
+
+export const favoritePlaceUpdateSchema = favoritePlaceInputSchema.partial().refine(
+  (value) => value.name !== undefined || value.coordinates !== undefined,
+  'Provide a name or coordinates to update.',
+)
+
 export const rainForecastSchema = z.object({
   location: z.object({
     name: z.string().nullable(),

@@ -3,12 +3,20 @@
   "name": "raincheck",
   "main": "./api/forecast.ts",
   "compatibility_date": "2026-09-18",
+  "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
     "run_worker_first": ["/api/*"],
     "not_found_handling": "single-page-application"
   },
+  "d1_databases": [
+    {
+      "binding": "AUTH_DB",
+      "database_name": "raincheck-auth",
+      "database_id": "757dcb51-3aee-4d2f-8938-f0bf28bcb966"
+    }
+  ],
   "secrets": {
     "required": ["TOMORROW_IO_API_KEY"]
   }

@@ -3,7 +3,7 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.api.tsbuildinfo",
     "target": "es2023",
     "lib": ["ES2023", "DOM"],
-    "types": ["node"],
+    "types": ["node", "@cloudflare/workers-types"],
     "skipLibCheck": true,
     "module": "nodenext",
     "verbatimModuleSyntax": true,
@@ -18,6 +18,6 @@
     "api/**/*.ts",
     "src/lib/forecast.ts",
     "src/lib/validation.ts",
-    "src/types/weather.ts"
+    "src/types/**/*.ts"
   ]
 }

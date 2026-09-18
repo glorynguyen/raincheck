@@ -1,3 +1,4 @@
+import type { AuthSession, FavoritePlace } from '../types/auth'
 import type { ApiError, Coordinates, RainForecast } from '../types/weather'
 import { getStoredApiKey } from './apiKey'
 import { normalizeForecast } from './forecast'
@@ -17,6 +18,71 @@ export class ForecastApiError extends Error {
     this.name = 'ForecastApiError'
     this.code = code
   }
+}
+
+export class AccountApiError extends Error {
+  readonly code: string
+
+  constructor(message: string, code: string) {
+    super(message)
+    this.name = 'AccountApiError'
+    this.code = code
+  }
+}
+
+export async function getAuthSession(): Promise<AuthSession> {
+  return requestJson('/api/auth/session')
+}
+
+export async function getPasskeyRegistrationOptions() {
+  return requestJson<{ challengeId: string; options: PublicKeyCredentialCreationOptionsJSON }>('/api/auth/register/options', { method: 'POST' })
+}
+
+export async function verifyPasskeyRegistration(challengeId: string, credential: unknown): Promise<AuthSession> {
+  return requestJson('/api/auth/register/verify', {
+    method: 'POST',
+    body: JSON.stringify({ challengeId, credential }),
+  })
+}
+
+export async function getPasskeyAuthenticationOptions() {
+  return requestJson<{ challengeId: string; options: PublicKeyCredentialRequestOptionsJSON }>('/api/auth/login/options', { method: 'POST' })
+}
+
+export async function verifyPasskeyAuthentication(challengeId: string, credential: unknown): Promise<AuthSession> {
+  return requestJson('/api/auth/login/verify', {
+    method: 'POST',
+    body: JSON.stringify({ challengeId, credential }),
+  })
+}
+
+export async function logout(): Promise<AuthSession> {
+  return requestJson('/api/auth/logout', { method: 'POST' })
+}
+
+export async function getFavorites(): Promise<FavoritePlace[]> {
+  const response = await requestJson<{ favorites: FavoritePlace[] }>('/api/favorites')
+  return response.favorites
+}
+
+export async function createFavorite(name: string, coordinates: Coordinates): Promise<FavoritePlace> {
+  const response = await requestJson<{ favorite: FavoritePlace }>('/api/favorites', {
+    method: 'POST',
+    body: JSON.stringify({ name, coordinates }),
+  })
+  return response.favorite
+}
+
+export async function updateFavorite(id: string, name: string, coordinates: Coordinates): Promise<FavoritePlace> {
+  const response = await requestJson<{ favorite: FavoritePlace }>(`/api/favorites/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ name, coordinates }),
+  })
+  return response.favorite
+}
+
+export async function deleteFavorite(id: string): Promise<void> {
+  await requestJson<void>(`/api/favorites/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
 export async function fetchRainForecast(
@@ -75,6 +141,20 @@ async function fetchFromApiRoute(
   }
 
   return rainForecastSchema.parse(await response.json())
+}
+
+async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(path, {
+    ...init,
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', ...init.headers },
+  })
+  if (response.status === 204) return undefined as T
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as ApiError | null
+    throw new AccountApiError(body?.error.message ?? 'Unable to complete that account request.', body?.error.code ?? 'api_error')
+  }
+  return response.json() as Promise<T>
 }
 
 // Bring-your-own-key path: calls Tomorrow.io directly from the browser for local dev.

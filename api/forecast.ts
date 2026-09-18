@@ -5,11 +5,13 @@ import {
   parseQueryCoordinate,
 } from '../src/lib/validation.js'
 import type { ApiError } from '../src/types/weather.js'
+import { handleAuthRequest, type AuthEnv } from './auth.js'
+import { handleFavoriteRequest } from './favorites.js'
 
 const TOMORROW_FORECAST_URL = 'https://api.tomorrow.io/v4/weather/forecast'
 const UPSTREAM_TIMEOUT_MS = 10_000
 
-interface Env {
+interface Env extends AuthEnv {
   ASSETS: {
     fetch(request: Request): Promise<Response>
   }
@@ -33,7 +35,13 @@ export default {
       return env.ASSETS.fetch(request)
     }
 
-  if (request.method !== 'GET') {
+    const authResponse = await handleAuthRequest(request, env, requestUrl.pathname)
+    if (authResponse) return authResponse
+
+    const favoriteResponse = await handleFavoriteRequest(request, env, requestUrl.pathname)
+    if (favoriteResponse) return favoriteResponse
+
+    if (requestUrl.pathname !== '/api/forecast' || request.method !== 'GET') {
       return new Response(
         JSON.stringify({
           error: { code: 'method_not_allowed', message: 'Use a GET request.' },
