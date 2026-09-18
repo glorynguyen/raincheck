@@ -64,7 +64,10 @@ function App() {
               onSubmit={forecast.loadForecast}
             />
             <p className="map-instruction">Or click the map to place the point.</p>
-            <ApiKeyControls />
+            <ApiKeyControls
+              showRateLimitMessage={forecast.errorCode === 'rate_limited'}
+              onKeySaved={() => forecast.loadForecast(coordinates, true)}
+            />
           </section>
 
           <Suspense fallback={<div className="map-placeholder">Loading map…</div>}>

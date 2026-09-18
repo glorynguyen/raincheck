@@ -6,19 +6,54 @@ import { rainForecastSchema } from './validation'
 const CLIENT_TIMEOUT_MS = 12_000
 const TOMORROW_FORECAST_URL = 'https://api.tomorrow.io/v4/weather/forecast'
 
+export class ForecastApiError extends Error {
+  readonly code: string
+
+  constructor(
+    message: string,
+    code: string,
+  ) {
+    super(message)
+    this.name = 'ForecastApiError'
+    this.code = code
+  }
+}
+
 export async function fetchRainForecast(
   coordinates: Coordinates,
   signal?: AbortSignal,
+  options?: { useStoredKey?: boolean },
 ): Promise<RainForecast> {
   const timeoutSignal = AbortSignal.timeout(CLIENT_TIMEOUT_MS)
   const combinedSignal = signal
     ? AbortSignal.any([signal, timeoutSignal])
     : timeoutSignal
 
-  const apiKey = getStoredApiKey()
-  return apiKey
-    ? fetchDirectFromTomorrow(coordinates, apiKey, combinedSignal)
-    : fetchFromApiRoute(coordinates, combinedSignal)
+  if (options?.useStoredKey) {
+    const apiKey = getStoredApiKey()
+    if (!apiKey) {
+      throw new ForecastApiError(
+        'Enter a Tomorrow.io API key to retry the forecast.',
+        'byok_required',
+      )
+    }
+    return fetchDirectFromTomorrow(coordinates, apiKey, combinedSignal)
+  }
+
+  try {
+    return await fetchFromApiRoute(coordinates, combinedSignal)
+  } catch (error) {
+    const apiKey = getStoredApiKey()
+    const canUseStoredKey =
+      apiKey &&
+      (error instanceof TypeError ||
+        (error instanceof ForecastApiError &&
+          error.code === 'service_not_configured'))
+
+    return canUseStoredKey
+      ? fetchDirectFromTomorrow(coordinates, apiKey, combinedSignal)
+      : Promise.reject(error)
+  }
 }
 
 async function fetchFromApiRoute(
@@ -33,8 +68,9 @@ async function fetchFromApiRoute(
 
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as ApiError | null
-    throw new Error(
+    throw new ForecastApiError(
       body?.error.message ?? 'Unable to load the rain forecast right now.',
+      body?.error.code ?? 'api_error',
     )
   }
 

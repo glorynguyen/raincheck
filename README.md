@@ -1,6 +1,6 @@
 # Raincheck
 
-A client-rendered React application for checking Tomorrow.io's hourly rain forecast at a latitude and longitude. A Vercel Function keeps the Tomorrow.io API key out of browser code and normalizes the next 24 hourly records.
+A client-rendered React application for checking Tomorrow.io's hourly rain forecast at a latitude and longitude. A Cloudflare Worker keeps the Tomorrow.io API key out of browser code and normalizes the next 24 hourly records.
 
 ## Requirements
 
@@ -14,24 +14,22 @@ npm install
 cp .env.example .env.local
 ```
 
-Set `TOMORROW_IO_API_KEY` in `.env.local`, then start the frontend and local function together:
+For local Worker development, put `TOMORROW_IO_API_KEY` in `.dev.vars`, then start the Worker and Vite build together:
 
 ```bash
-npm run dev:full
+npm run dev:worker
 ```
 
-Open the URL printed by Vercel CLI, normally `http://localhost:3000`. The first run may ask you to sign in or configure a local Vercel project.
+Wrangler serves the app at the local URL it prints, normally `http://localhost:8787`.
 
-To work only on the interface, use `npm run dev`. Forecast requests require the Vercel function and will not work through the standalone Vite server.
+To work only on the interface, use `npm run dev`.
 
 ### Bring your own key (standalone Vite dev)
 
-If you'd rather skip `vercel dev`, run `npm run dev` and paste a Tomorrow.io
-API key into the "Tomorrow.io API key (dev only)" field in the app. The key
-is stored in your browser's local storage and requests go straight from the
-browser to Tomorrow.io, bypassing the server function entirely. This is a
-local-development convenience only — never use it for shared or production
-deployments, since the key is visible in the browser.
+The app uses the managed Worker route first. If the Worker is not configured,
+or Tomorrow.io rate-limits the managed key with HTTP 429, the app lets the user
+enter a personal Tomorrow.io key. That key is stored only in the browser and is
+sent directly to Tomorrow.io; it is never sent to Cloudflare.
 
 ## Commands
 
@@ -39,13 +37,33 @@ deployments, since the key is visible in the browser.
 npm run lint
 npm test -- --run
 npm run build
+npm run dev:worker
+npm run deploy
 ```
 
 ## Deployment
 
-1. Import the repository into Vercel as a Vite project.
-2. Add `TOMORROW_IO_API_KEY` in the Vercel project environment variables.
-3. Deploy using the default `npm run build` command and `dist` output directory.
+The repository contains `wrangler.jsonc`, which deploys the Worker entry point
+and the Vite `dist` directory as one application. The Worker handles
+`/api/forecast`; all other requests are served from the static assets.
+
+For a manual first deployment:
+
+```bash
+npx wrangler login
+npx wrangler secret put TOMORROW_IO_API_KEY
+npm run deploy
+```
+
+For Git push-to-deploy, connect the repository under the Worker in Cloudflare
+Workers Builds:
+
+- Production branch: `main`
+- Build command: `npm ci && npm run build`
+- Deploy command: `npx wrangler deploy`
+
+Add `TOMORROW_IO_API_KEY` as an encrypted secret on the Worker. Do not put it
+in GitHub, `vars`, `.env`, or a variable beginning with `VITE_`.
 
 Never expose the key through a variable beginning with `VITE_`; Vite embeds those variables in browser assets.
 

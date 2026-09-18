@@ -1,4 +1,3 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { ZodError } from 'zod'
 import { normalizeForecast } from '../src/lib/forecast.js'
 import {
@@ -10,43 +9,55 @@ import type { ApiError } from '../src/types/weather.js'
 const TOMORROW_FORECAST_URL = 'https://api.tomorrow.io/v4/weather/forecast'
 const UPSTREAM_TIMEOUT_MS = 10_000
 
+interface Env {
+  ASSETS: {
+    fetch(request: Request): Promise<Response>
+  }
+  TOMORROW_IO_API_KEY?: string
+}
+
 function sendError(
-  response: VercelResponse,
   status: number,
   code: string,
   message: string,
 ) {
   const body: ApiError = { error: { code, message } }
-  return response.status(status).json(body)
+  return Response.json(body, { status })
 }
 
-export default async function handler(
-  request: VercelRequest,
-  response: VercelResponse,
-) {
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const requestUrl = new URL(request.url)
+
+    if (!requestUrl.pathname.startsWith('/api/')) {
+      return env.ASSETS.fetch(request)
+    }
+
   if (request.method !== 'GET') {
-    response.setHeader('Allow', 'GET')
-    return sendError(response, 405, 'method_not_allowed', 'Use a GET request.')
+      return new Response(
+        JSON.stringify({
+          error: { code: 'method_not_allowed', message: 'Use a GET request.' },
+        } satisfies ApiError),
+        { status: 405, headers: { Allow: 'GET', 'Content-Type': 'application/json' } },
+      )
   }
 
   const parsedCoordinates = coordinatesSchema.safeParse({
-    lat: parseQueryCoordinate(request.query.lat),
-    lng: parseQueryCoordinate(request.query.lng),
+      lat: parseQueryCoordinate(requestUrl.searchParams.get('lat') ?? undefined),
+      lng: parseQueryCoordinate(requestUrl.searchParams.get('lng') ?? undefined),
   })
 
   if (!parsedCoordinates.success) {
-    return sendError(
-      response,
+      return sendError(
       400,
       'invalid_coordinates',
       'Latitude must be between -90 and 90 and longitude between -180 and 180.',
     )
   }
 
-  const apiKey = process.env.TOMORROW_IO_API_KEY
+    const apiKey = env.TOMORROW_IO_API_KEY
   if (!apiKey) {
     return sendError(
-      response,
       503,
       'service_not_configured',
       'The weather service is not configured.',
@@ -69,8 +80,7 @@ export default async function handler(
     })
 
     if (upstreamResponse.status === 429) {
-      return sendError(
-        response,
+        return sendError(
         429,
         'rate_limited',
         'The weather service is busy. Please try again in a minute.',
@@ -79,7 +89,6 @@ export default async function handler(
 
     if (!upstreamResponse.ok) {
       return sendError(
-        response,
         502,
         'provider_error',
         'The weather forecast is temporarily unavailable.',
@@ -87,15 +96,14 @@ export default async function handler(
     }
 
     const forecast = normalizeForecast(await upstreamResponse.json())
-    response.setHeader(
-      'Cache-Control',
-      'public, s-maxage=600, stale-while-revalidate=300',
-    )
-    return response.status(200).json(forecast)
+      return Response.json(forecast, {
+        headers: {
+          'Cache-Control': 'public, s-maxage=600, stale-while-revalidate=300',
+        },
+      })
   } catch (error) {
     if (error instanceof ZodError) {
       return sendError(
-        response,
         502,
         'invalid_provider_response',
         'The weather service returned an unexpected response.',
@@ -105,12 +113,12 @@ export default async function handler(
     const timedOut =
       error instanceof DOMException && error.name === 'TimeoutError'
     return sendError(
-      response,
       timedOut ? 504 : 502,
       timedOut ? 'provider_timeout' : 'provider_error',
       timedOut
         ? 'The weather service took too long to respond.'
         : 'The weather forecast is temporarily unavailable.',
     )
+    }
   }
 }

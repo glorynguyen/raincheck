@@ -1,24 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
-import { fetchRainForecast } from '../lib/api'
+import { fetchRainForecast, ForecastApiError } from '../lib/api'
 import type { Coordinates, RainForecast } from '../types/weather'
 
 type ForecastState =
-  | { status: 'idle'; data: null; error: null }
-  | { status: 'loading'; data: RainForecast | null; error: null }
-  | { status: 'success'; data: RainForecast; error: null }
-  | { status: 'error'; data: RainForecast | null; error: string }
+  | { status: 'idle'; data: null; error: null; errorCode: null }
+  | { status: 'loading'; data: RainForecast | null; error: null; errorCode: null }
+  | { status: 'success'; data: RainForecast; error: null; errorCode: null }
+  | { status: 'error'; data: RainForecast | null; error: string; errorCode: string }
 
 export function useRainForecast() {
   const [state, setState] = useState<ForecastState>({
     status: 'idle',
     data: null,
     error: null,
+    errorCode: null,
   })
   const activeRequest = useRef<AbortController | null>(null)
 
   useEffect(() => () => activeRequest.current?.abort(), [])
 
-  async function loadForecast(coordinates: Coordinates) {
+  async function loadForecast(coordinates: Coordinates, useStoredKey = false) {
     activeRequest.current?.abort()
     const controller = new AbortController()
     activeRequest.current = controller
@@ -26,12 +27,17 @@ export function useRainForecast() {
       status: 'loading',
       data: current.data,
       error: null,
+      errorCode: null,
     }))
 
     try {
-      const data = await fetchRainForecast(coordinates, controller.signal)
+      const data = await fetchRainForecast(
+        coordinates,
+        controller.signal,
+        { useStoredKey },
+      )
       if (!controller.signal.aborted) {
-        setState({ status: 'success', data, error: null })
+        setState({ status: 'success', data, error: null, errorCode: null })
       }
     } catch (error) {
       if (!controller.signal.aborted) {
@@ -41,10 +47,12 @@ export function useRainForecast() {
             : error instanceof Error
               ? error.message
               : 'Unable to load the rain forecast right now.'
+        const errorCode = error instanceof ForecastApiError ? error.code : 'request_error'
         setState((current) => ({
           status: 'error',
           data: current.data,
           error: message,
+          errorCode,
         }))
       }
     }

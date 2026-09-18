@@ -2,7 +2,15 @@ import { KeyRound } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { clearStoredApiKey, getStoredApiKey, setStoredApiKey } from '../lib/apiKey'
 
-export function ApiKeyControls() {
+type ApiKeyControlsProps = {
+  showRateLimitMessage?: boolean
+  onKeySaved?: () => void
+}
+
+export function ApiKeyControls({
+  showRateLimitMessage = false,
+  onKeySaved,
+}: ApiKeyControlsProps) {
   const [apiKey, setApiKey] = useState('')
   const [hasStoredKey, setHasStoredKey] = useState(() => getStoredApiKey() !== null)
 
@@ -12,6 +20,7 @@ export function ApiKeyControls() {
     setStoredApiKey(apiKey)
     setApiKey('')
     setHasStoredKey(true)
+    onKeySaved?.()
   }
 
   function clear() {
@@ -23,7 +32,7 @@ export function ApiKeyControls() {
     <form className="location-form api-key-form" onSubmit={submit}>
       <label>
         <span>
-          <KeyRound aria-hidden="true" size={14} /> Tomorrow.io API key (dev only)
+          <KeyRound aria-hidden="true" size={14} /> Tomorrow.io API key
         </span>
         <input
           name="apiKey"
@@ -36,10 +45,15 @@ export function ApiKeyControls() {
       </label>
 
       <p className="form-message">
-        Stored only in this browser&apos;s local storage. Calls Tomorrow.io
-        directly from the browser, bypassing the server function - for local
-        development only, never for shared or production use.
+        Stored only in this browser&apos;s local storage. It is used for local
+        development or as a fallback when the managed weather service is unavailable.
       </p>
+      {showRateLimitMessage && (
+        <p className="form-message" role="status">
+          Tomorrow.io is rate-limiting the managed service. Enter your own key
+          to retry this forecast directly.
+        </p>
+      )}
 
       <div className="form-actions">
         <button className="primary-button" type="submit">
